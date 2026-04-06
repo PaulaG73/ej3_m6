@@ -7,12 +7,34 @@
         <section class="registro__section">
           <h2 class="registro__section-heading">Datos básicos</h2>
 
-          <label class="registro__field">
+          <label
+            class="registro__field"
+            :class="{ 'registro__field--invalid': nombreMuestraError }"
+          >
             <span class="registro__label">Nombre</span>
-            <input v-model.trim="nombre" type="text" name="nombre" autocomplete="name" />
+            <input
+              v-model.trim="nombre"
+              type="text"
+              name="nombre"
+              autocomplete="name"
+              :class="{ 'registro__control--invalid': nombreMuestraError }"
+              :aria-invalid="nombreMuestraError"
+              :aria-describedby="nombreMuestraError ? 'err-nombre' : undefined"
+              @blur="nombreTocado = true"
+            />
+            <span
+              v-if="nombreMuestraError"
+              id="err-nombre"
+              class="registro__error"
+              role="alert"
+              >Indica un nombre.</span
+            >
           </label>
 
-          <label class="registro__field">
+          <label
+            class="registro__field"
+            :class="{ 'registro__field--invalid': edadMuestraError }"
+          >
             <span class="registro__label">Edad (0–120)</span>
             <input
               v-model.number="edad"
@@ -21,7 +43,18 @@
               min="0"
               max="120"
               step="1"
+              :class="{ 'registro__control--invalid': edadMuestraError }"
+              :aria-invalid="edadMuestraError"
+              :aria-describedby="edadMuestraError ? 'err-edad' : undefined"
+              @blur="edadTocado = true"
             />
+            <span
+              v-if="edadMuestraError"
+              id="err-edad"
+              class="registro__error"
+              role="alert"
+              >Edad obligatoria, entre 0 y 120.</span
+            >
           </label>
 
           <label class="registro__field">
@@ -42,12 +75,28 @@
             </label>
           </fieldset>
 
-          <fieldset class="registro__fieldset">
+          <fieldset
+            class="registro__fieldset"
+            :class="{ 'registro__fieldset--invalid': interesesMuestraError }"
+            :aria-describedby="interesesMuestraError ? 'err-intereses' : undefined"
+          >
             <legend class="registro__legend">Intereses</legend>
             <label v-for="opt in interesesOpciones" :key="opt" class="registro__choice">
-              <input v-model="intereses" type="checkbox" :value="opt" />
+              <input
+                v-model="intereses"
+                type="checkbox"
+                :value="opt"
+                @change="interesesTocados = true"
+              />
               {{ opt }}
             </label>
+            <span
+              v-if="interesesMuestraError"
+              id="err-intereses"
+              class="registro__error"
+              role="alert"
+              >Marca al menos un interés.</span
+            >
           </fieldset>
 
           <label class="registro__field">
@@ -104,7 +153,10 @@
 <script setup>
 import { ref, computed } from 'vue'
 
-/** Paso 1–2: estado enlazado al formulario */
+/**
+ * Pasos 1–6: formulario reactivo, :value, vista previa, validación, envío JSON.
+ * Errores visibles tras intento de envío o tras tocar el campo (blur / change).
+ */
 const nombre = ref('')
 const edad = ref(null)
 const biografia = ref('')
@@ -113,6 +165,11 @@ const intereses = ref([])
 /** Objeto del listado (misma referencia que en `paises`) para el binding por referencia */
 const pais = ref(null)
 const tecnologias = ref([])
+
+const intentoEnviar = ref(false)
+const nombreTocado = ref(false)
+const edadTocado = ref(false)
+const interesesTocados = ref(false)
 
 const niveles = [
   { value: 'junior', label: 'Junior' },
@@ -132,6 +189,7 @@ const paises = [
 const tecnologiasOpciones = ['Vue', 'React', 'Angular', 'Svelte', 'Solid']
 
 function edadEsValida(val) {
+  if (val === '' || val === null || val === undefined) return false
   const n = typeof val === 'number' ? val : Number(val)
   return Number.isFinite(n) && n >= 0 && n <= 120
 }
@@ -142,11 +200,23 @@ const nivelLabel = computed(
   () => niveles.find((n) => n.value === nivel.value)?.label ?? nivel.value,
 )
 
-const isValid = computed(() => {
-  const nombreOk = nombre.value.trim().length > 0
-  const interesesOk = intereses.value.length >= 1
-  return nombreOk && edadEsValida(edad.value) && interesesOk
-})
+const nombreInvalido = computed(() => nombre.value.trim().length === 0)
+const edadInvalida = computed(() => !edadEsValida(edad.value))
+const interesesInvalidos = computed(() => intereses.value.length < 1)
+
+const nombreMuestraError = computed(
+  () => nombreInvalido.value && (intentoEnviar.value || nombreTocado.value),
+)
+const edadMuestraError = computed(
+  () => edadInvalida.value && (intentoEnviar.value || edadTocado.value),
+)
+const interesesMuestraError = computed(
+  () => interesesInvalidos.value && (intentoEnviar.value || interesesTocados.value),
+)
+
+const isValid = computed(
+  () => !nombreInvalido.value && !edadInvalida.value && !interesesInvalidos.value,
+)
 
 const nombrePreview = computed(() => nombre.value.trim() || '—')
 const edadPreview = computed(() =>
@@ -161,6 +231,7 @@ const tecnologiasPreview = computed(() =>
 )
 
 function onSubmit() {
+  intentoEnviar.value = true
   if (!isValid.value) return
 
   const payload = {
@@ -269,6 +340,31 @@ function onSubmit() {
 
 .registro__choice input {
   width: auto;
+}
+
+.registro__field--invalid .registro__label {
+  color: #991b1b;
+}
+
+.registro__control--invalid {
+  border-color: #b91c1c !important;
+  outline-color: rgba(185, 28, 28, 0.35);
+}
+
+.registro__error {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  color: #991b1b;
+}
+
+.registro__fieldset--invalid {
+  padding: 0.5rem 0.65rem;
+  margin-left: -0.65rem;
+  margin-right: -0.65rem;
+  border-radius: 6px;
+  outline: 1px solid #b91c1c;
+  outline-offset: 2px;
 }
 
 .registro__counter {
